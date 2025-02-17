@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "ICMPPingLogger": {
+      "commandName": "Project",
+      "commandLineArgs": "60 172.20.30.10 172.67.213.101 77.75.77.222"
+    }
+  }
+}
