@@ -1,33 +1,59 @@
-﻿namespace ICMPPingLogger
+﻿using Microsoft.Extensions.DependencyInjection;
+
+namespace ICMPPingLogger
 {
     class Program
     {
-        static string _outputFile = "ping_results.xml";
 
         static async Task Main(string[] args)
         {
             if (args.Length < 2 || !int.TryParse(args[0], out int duration))
             {
-                GlobalHelper.WriteValidUseInfo("");
+                var logger = new ConsoleLogger();
+                logger.WriteUsageInfo("Invalid arguments.");
                 return;
             }
 
-            IDataReader _dataReader = new XmlDataReader(_outputFile);
+            string outputFile = "ping_results.xml";
             string[] ipAddresses = args[1..];
-            ICMPPingLoggerHelper icmpPingLoggerHelper = new ICMPPingLoggerHelper(_dataReader);
-            if (!icmpPingLoggerHelper.ArgsAreValid(duration, ipAddresses))
+
+            // Dependency Injection container
+            var serviceProvider = new ServiceCollection()
+                .AddSingleton<ILogger, ConsoleLogger>()  // Logging
+                .AddSingleton<ArgumentValidator>()       // Input arguments validation 
+                .AddSingleton<IDataReader>(_ => new XmlDataReader(outputFile)) // Read of XML results
+                .AddSingleton<IDataWriter>(_ => new XmlDataWriter(outputFile)) // Write results to XML
+                .AddSingleton<PingAsync>()              // Ping management
+                .AddSingleton<AvailabilityReporter>()   // Availability counting
+                .BuildServiceProvider();
+
+            var loggerService = serviceProvider.GetRequiredService<ILogger>();
+            var validator = serviceProvider.GetRequiredService<ArgumentValidator>();
+
+            if (!validator.Validate(duration, ipAddresses))
                 return;
 
-            using (IDataWriter _dataWriter = new XmlDataWriter(_outputFile))
+            try
             {
-                PingAsync pa = new PingAsync(_dataWriter);
-                Console.WriteLine($"Start app {DateTime.Now}");
-                await pa.Execute(duration, ipAddresses);
-                Console.WriteLine($"Finished {DateTime.Now}");
+                using (var dataWriter = serviceProvider.GetRequiredService<IDataWriter>())
+                using (var pingAsync = serviceProvider.GetRequiredService<PingAsync>())
+                {
+                    loggerService.WriteInfo($"Start app {DateTime.Now}");
+                    await pingAsync.Execute(duration, ipAddresses);
+                    loggerService.WriteInfo($"Finished {DateTime.Now}");
+                }
             }
+            catch (Exception ex)
+            {
+                loggerService.WriteInfo($"Error occurred: {ex.Message}");
+            }
+            finally
+            {
+                loggerService.WriteInfo($"Test completed. Results saved to {outputFile}");
 
-            Console.WriteLine($"Test completed. Results saved to {_outputFile}");
-            icmpPingLoggerHelper.CalculateAvailability();
+                var reporter = serviceProvider.GetRequiredService<AvailabilityReporter>();
+                reporter.GenerateReport();
+            }
         }
 
     }

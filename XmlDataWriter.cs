@@ -16,7 +16,7 @@ namespace ICMPPingLogger
 
         private void InitializeXmlFile()
         {
-            _fileStream = new FileStream(_outputFile, FileMode.Create, FileAccess.Write, FileShare.Read);
+            _fileStream = new FileStream(_outputFile, FileMode.Create, FileAccess.Write, FileShare.None);
             _writer = XmlWriter.Create(_fileStream, new XmlWriterSettings { Indent = true, OmitXmlDeclaration = false });
 
             _writer.WriteStartDocument();
